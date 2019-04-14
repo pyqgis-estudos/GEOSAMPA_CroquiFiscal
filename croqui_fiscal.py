@@ -339,8 +339,8 @@ class SP_CroquiFiscal:
                     # Requerimento ao endereço do GeoSampa Cidadão
                     uri = 'http://geosampa.prefeitura.sp.gov.br/PaginasPublicas/DownloadCroqui.aspx?setor={0:0>3}&quadra={1:0>3}'.format(SQ[:3], SQ[3:])
                 ################################ fileobj = urllib.request.urlopen (uri)
-                fileobj = ""
-                # print(uri)  # Verificação da uri
+                # fileobj = "" ########## MODO DE TESTE
+                # print(uri)  ########## MODO DE TESTE
 
 
                 ##TODO: Criar diretório
@@ -348,8 +348,8 @@ class SP_CroquiFiscal:
 
                 # Cria um novo arquivo e salva o conteúdo
                 file = open(folderName + r'\CroquiFiscal---{0:0>3}_{1:0>3}---{2}.pdf'.format(SQ[:3], SQ[3:], now), 'w')
-                file.write(fileobj)
-                ################################# file.write(urllib.request.urlopen(uri).read())
+                # file.write(fileobj) ########## MODO DE TESTE
+                file.write(urllib.request.urlopen(uri).read())
                 file.close()
 
             self.iface.messageBar().pushMessage("Sucesso", "Arquivos salvos em " +  folderName,  level=Qgis.Success, duration=5)
