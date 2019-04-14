@@ -17,3 +17,4 @@ Para isso, deve-se criar um arquivo chamado "Diretorio_QuadrasFiscais.txt" na pa
 * Verificar a sucesso do download
 * Verificar limite de Requests
 * Mudar o método para o QgsNetwork, devido o uso de proxy
+* Transformar o campo de Lista de SQ em um campo multilinhas
