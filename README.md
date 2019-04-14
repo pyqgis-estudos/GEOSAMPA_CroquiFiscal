@@ -14,3 +14,6 @@ Para isso, deve-se criar um arquivo chamado "Diretorio_QuadrasFiscais.txt" na pa
 * Ajustar o METADADO
 * Inserir a opção de fonte de dado pelo campo SQ
 * Avaliar se já existe o croqui na pasta padrão
+* Verificar a sucesso do download
+* Verificar limite de Requests
+* Mudar o método para o QgsNetwork, devido o uso de proxy
