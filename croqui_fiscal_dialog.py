@@ -42,3 +42,11 @@ class SP_CroquiFiscalDialog(QtWidgets.QDialog, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+
+
+    # Choose the destination directory
+    def diretorio(self):
+        filename = QtWidgets.QFileDialog.getExistingDirectory(parent=None, caption=QtWidgets.QApplication.translate("selecione a pasta de destino", "Selecione o diretorio ..."), directory=rQtCore.QDir.currentPath())
+        # filename = QtWidgets.QFileDialog.getExistingDirectory(parent=None, caption=QtWidgets.QApplication.translate("select destination", "Select directory to Fling from..."), directory=QtCore.QDir.currentPath())
+        if filename:
+            self._diretorio.setText(filename)

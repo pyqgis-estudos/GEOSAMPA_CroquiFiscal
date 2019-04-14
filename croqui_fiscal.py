@@ -23,7 +23,7 @@
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction
+from PyQt5.QtWidgets import QAction, QFileDialog, QApplication
 from PyQt5.QtWidgets import QMenu
 
 
@@ -38,6 +38,7 @@ from qgis.utils import iface
 from datetime import datetime
 import urllib
 import os.path
+import sys
 
 
 class SP_CroquiFiscal:
@@ -196,6 +197,36 @@ class SP_CroquiFiscal:
         # will be set False in run()
         self.first_start = True
 
+    def select_output(self):
+        global folderName
+
+        folderName = QFileDialog.getExistingDirectory( self.dlg, caption="Pasta de Croqui Fiscal", directory=os.path.expanduser("~")+r'\downloads')
+        self.dlg._diretorio.setText(folderName)
+
+
+    # Recarrega os valores de CAMPOS
+    def load_fields(self):
+        layers = [l.layer() for l in QgsProject.instance().layerTreeRoot().children()]
+        # Recebe a camada selecionada
+        choosedLayerIndex = self.dlg._camada.currentIndex()
+        choosedLayers = layers[choosedLayerIndex]
+
+        # Carrega os campos possíveis
+        fields = list(choosedLayers.fields())
+        fields_name = [n.name() for n in fields]
+
+
+        self.dlg._setor.clear()
+        self.dlg._setor.addItems(fields_name)
+        self.dlg._quadra.clear()
+        self.dlg._quadra.addItems(fields_name)
+
+        self.dlg._setor.setCurrentIndex(self.dlg._setor.findText('qd_setor'))
+        self.dlg._quadra.setCurrentIndex(self.dlg._setor.findText('qd_fiscal'))
+        return fields_name
+
+
+
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -209,11 +240,47 @@ class SP_CroquiFiscal:
     def run(self):
         """Run method that performs all the real work"""
 
+
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
             self.first_start = False
             self.dlg = SP_CroquiFiscalDialog()
+            self.dlg._diretorio_botao.clicked.connect(self.select_output)
+
+        
+
+        # LAYERS OPTIONS
+        # Fetch the currently loaded layers
+        layers = QgsProject.instance().layerTreeRoot().children()
+        # Clear the contents of the comboBox from previous runs
+        self.dlg._camada.clear()
+        # Populate the comboBox with names of all the loaded layers
+        self.dlg._camada.addItems([layer.name() for layer in layers])
+        # Choose the active Layer
+        layers = [l.layer() for l in layers]
+        index = layers.index(iface.activeLayer())
+        self.dlg._camada.setCurrentIndex(index)
+
+        # FIELDS OPTION
+        self.load_fields()
+        self.dlg._load_fields.clicked.connect(self.load_fields)
+        # --Dentro da função
+        # self.dlg._setor.setCurrentIndex(self.dlg._setor.findText('qd_setor'))
+        # self.dlg._quadra.setCurrentIndex(self.dlg._setor.findText('qd_fiscal'))
+
+
+        # Diretório padrão - para reconhecer qual a pasta em que usuário gosta de salvar
+        Diretorio_QuadrasFiscais = "\\".join(os.path.dirname(__file__).split('/'))
+        Diretorio_QuadrasFiscais = "\\".join([Diretorio_QuadrasFiscais, r'Diretorio_QuadrasFiscais.txt'])
+        if os.path.exists(Diretorio_QuadrasFiscais):
+            with open(Diretorio_QuadrasFiscais) as file:
+                # print(Diretorio_QuadrasFiscais)
+                folderName = file.read()
+            self.dlg._diretorio.setText(folderName)
+
+
+
 
         # show the dialog
         self.dlg.show()
@@ -221,36 +288,68 @@ class SP_CroquiFiscal:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            
-            # Obtem as feições selecionadas de uma camada.
-            selectedFeatures = iface.activeLayer().selectedFeatures()
-            
-            # Obtem os valores distintos de SQ, somente do é do tipo fiscal
-            SQ_Lista = set()
-            for feature in selectedFeatures:
-                if feature['qd_tipo'] == 'F':
-                    SQ_Lista.add(feature['qd_setor']+feature['qd_fiscal'])
+
+
+            if self.dlg._selectedFeatures.isChecked():
+                # Obtem as feições selecionadas da camada indicada
+                choosedLayerIndex = self.dlg._camada.currentIndex()
+                choosedLayers = layers[choosedLayerIndex]#.layer()
+                selectedFeatures = choosedLayers.selectedFeatures()
+
+                # Retorna os campos selecionados
+                Campo_Setor = self.dlg._setor.currentText ()
+                Campo_Quadra = self.dlg._quadra.currentText ()
+                print(Campo_Quadra, Campo_Setor)
+                
+                # Obtem os valores distintos de SQ, somente das que são do tipo FISCAL
+                SQ_Lista = set() # Limpa gratuitamente o SQ_Lista
+                for feature in selectedFeatures:
+                    if feature['qd_tipo'] == 'F':
+                        SQ_Lista.add(feature[Campo_Setor]+feature[Campo_Quadra])
+
+            else:
+                SQ_Lista = self.dlg._SQ_list.text()
+                SQ_Lista = set(SQ_Lista.split(', '))
 
             print(SQ_Lista)
+
+            # Verifica se todos os SQ possuem 3 dígitos
+            for SQ in SQ_Lista:
+                if len(SQ) != 6:
+                    self.iface.messageBar().pushMessage("Falha", "Alguns SQs ({}) não possuem 6 dígitos!".format(SQ),  level=Qgis.Critical, duration=10)
+                    return None
+
+
 
             now = datetime.now()
             ano = now.year
             mes = now.month
             now = str(ano) + '-' + str(mes)
 
+            # Verifica qual provedor usar
+            PRODAM = self.dlg._servidor.isChecked()
+
             # Loop para cada SQ
             for SQ in SQ_Lista:
-              # Requerimento ao endereço da prodam
-              uri_prodam = 'http://sf9402.app.prodam/intranet/frmConsultaCroquiPDF.aspx?pstrSetor={0:0>3}&pstrQuadra={1:0>3}'.format(SQ[:3], SQ[3:])
-              uri_pub = 'http://geosampa.prefeitura.sp.gov.br/PaginasPublicas/DownloadCroqui.aspx?setor={0:0>3}&quadra={1:0>3}'.format(SQ[:3], SQ[3:])
-              ### fileobj = urllib.request.urlopen (uri_pub)
-              fileobj = ""
-              print(uri_pub)  # Verificação da uri
-  
 
-              # Cria um novo arquivo e salva o conteúdo
-              ##TODO: Criar diretório
-              file = open(r'C:\_RAW\TESTE\CroquiFiscais\CroquiFiscal---{0:0>3}_{1:0>3}---{2}.pdf'.format(SQ[:3], SQ[3:], now), 'w')
-              file.write(fileobj)
-              # file.write(urllib.request.urlopen(uri_pub).read())
-              file.close()
+                if PRODAM:
+                    # Requerimento ao endereço da PRODAM
+                    uri = 'http://sf9402.app.prodam/intranet/frmConsultaCroquiPDF.aspx?pstrSetor={0:0>3}&pstrQuadra={1:0>3}'.format(SQ[:3], SQ[3:])
+                else:
+                    # Requerimento ao endereço do GeoSampa Cidadão
+                    uri = 'http://geosampa.prefeitura.sp.gov.br/PaginasPublicas/DownloadCroqui.aspx?setor={0:0>3}&quadra={1:0>3}'.format(SQ[:3], SQ[3:])
+                ################################ fileobj = urllib.request.urlopen (uri)
+                fileobj = ""
+                # print(uri)  # Verificação da uri
+
+
+                ##TODO: Criar diretório
+
+
+                # Cria um novo arquivo e salva o conteúdo
+                file = open(folderName + r'\CroquiFiscal---{0:0>3}_{1:0>3}---{2}.pdf'.format(SQ[:3], SQ[3:], now), 'w')
+                file.write(fileobj)
+                ################################# file.write(urllib.request.urlopen(uri).read())
+                file.close()
+
+            self.iface.messageBar().pushMessage("Sucesso", "Arquivos salvos em " +  folderName,  level=Qgis.Success, duration=5)
